@@ -1,0 +1,71 @@
+project_root/
+├── .gitignore
+├── README.md
+├── requirements_checklist.md
+├── cleanup_report.md
+│
+├── governance_core/
+│   ├── __init__.py
+│   ├── api.py
+│   ├── audit_logger.py
+│   ├── cli.py
+│   ├── data_profiles.py
+│   ├── governance_agent.py
+│   ├── llm_provider.py
+│   ├── requirements.txt
+│   ├── rule_engine.py
+│   ├── threat_aggregation.py
+│   ├── threat_mapping.py
+│   └── metrics/
+│       ├── __init__.py
+│       ├── privacy_risk.py
+│       └── statistical_fidelity.py
+│
+├── scripts/
+│   ├── adversarial_audit.py
+│   ├── domias_validation.py
+│   └── invariance_proofs.py
+│
+├── tests/
+│   ├── test_edge_cases.py
+│   ├── test_evidence_metrics.py
+│   ├── test_jailbreak_prevention.py
+│   ├── test_threat_aggregation.py
+│   └── test_threat_mapping_enhancements.py
+│
+├── docs/
+│   ├── LEAKAGE_METRICS.md
+│   ├── LLM_TESTING_GUIDE.md
+│   ├── SCOPE_AND_BOUNDARIES.md
+│   ├── TEST_GUIDE.md
+│   └── THREAT_MODEL.md
+│
+├── examples/
+│   ├── end_to_end_example.py
+│   ├── public_api_example.py
+│   ├── threat_aggregation_example.py
+│   └── threat_mapping_example.py
+│
+├── policy/
+│   ├── README.md
+│   └── versions/v1/
+│       ├── column_dictionary.yaml
+│       ├── forbidden.yaml
+│       ├── policy.yaml
+│       ├── reason_codes.yaml
+│       ├── sample_report.json
+│       ├── sample_schema.csv
+│       └── thresholds.yaml
+│
+└── _archive_unused/
+    ├── leakage_agent/          (legacy package)
+    ├── gating/                 (stub specs)
+    ├── transform/              (stub specs)
+    ├── Testing_LLM.py
+    ├── Testing_Without_LLM.py
+    ├── validation_experiments.py
+    ├── audit_logs/
+    ├── audit_report.json
+    ├── example_outputs/
+    ├── outputs/
+    └── tmp_smoke/

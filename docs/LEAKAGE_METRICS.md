@@ -1,95 +1,45 @@
-# Leakage Detection Metrics Reference
+# Leakage and Distribution Metrics (Evidence-Based)
 
-This document details the quantitative metrics used by the **Rule Engine** to evaluate synthetic data privacy, utility, and statistical fidelity.
+This project reports statistical evidence, not rule-based pass/fail claims.
 
-All metrics are computed **deterministically** and are invariant to the specific LLM used for interpretation.
+## Structural Contract Validation
+- Schema inference: per-column probabilistic type profile using parseability, cardinality, and entropy.
+- Type drift: Jensen-Shannon divergence between baseline and synthetic type probability vectors.
+- Nullability drift: binomial test comparing observed null count to baseline null rate.
 
----
+## Distribution Shift
+- Continuous columns:
+  - Kolmogorov-Smirnov statistic + p-value
+  - Wasserstein distance
+- Categorical columns:
+  - Jensen-Shannon divergence
+  - Population Stability Index (PSI)
+  - Chi-square p-value for frequency-table shift
+- Required outputs:
+  - `shift_score`
+  - `confidence`
+  - `sample_size_warning`
 
-## 1. Statistical Fidelity Metrics
-*Ensures the synthetic data distribution matches the original data.*
+## Mode Collapse
+- Numeric entropy comparison: `entropy(real)` vs `entropy(synthetic)`.
+- Numeric support shrinkage: convex hull volume ratio `volume_syn / volume_real`.
+- Category collapse: category coverage ratio `|syn ∩ real| / |real|`.
+- Output: `collapse_probability` in `[0,1]`.
 
-### 1.1 Kullback-Leibler (KL) Divergence
-Measures how one probability distribution (synthetic) differentiates from a second, reference probability distribution (original).
+## Duplicate and Memorization Risk
+- Level 1 exact duplicates: stable row hashing.
+- Level 2 near duplicates: nearest-neighbor cosine similarity in encoded feature space.
+- Level 3 memorization risk: classifier separability + calibration evidence (AUC, Brier, ECE), combined into `leakage_risk_score`.
 
-- **Type**: Column-univariate
-- **Range**: $[0, \infty)$
-- **Ideal**: $0.0$ (Indentical distributions)
-- **Threshold**: $> 0.1$ indicates drift; $> 0.5$ indicates severe mismatch.
-- **Computation**: Bin continuous variables; categorical variables use frequency masses.
+## Evidence Record Format
+Core engine evidence uses machine-readable records:
 
-### 1.2 Wasserstein Distance (Earth Mover's Distance)
-Measures the minimum "work" needed to transform the synthetic distribution into the original distribution.
-
-- **Type**: Column-univariate (Continuous)
-- **Range**: $[0, \infty)$
-- **Ideal**: $0.0$
-- **Advantages**: More robust than KL divergence for disjoint distributions.
-
-### 1.3 Correlation Matrix Distance (Frobenius Norm)
-Measures how well the pairwise correlations between columns are preserved.
-
-- **Formula**: $||Corr_{syn} - Corr_{orig}||_F$
-- **Range**: $[0, \sqrt{N^2}]$ where N is number of columns.
-- **Ideal**: $0.0$
-- **Interpretation**: Higher values indicate that relationships between variables (e.g., age vs. income) have been distorted.
-
----
-
-## 2. Privacy Risk Metrics
-*Quantifies the risk of re-identification or information leakage.*
-
-### 2.1 Near-Duplicate Rate
-The percentage of synthetic records that are identical (or effectively identical) to records in the original training data.
-
-- **Type**: Row-level
-- **Formula**: $\frac{|S \cap O|}{|S|}$ where $S$ is synthetic set, $O$ is original set.
-- **Threshold**: 0% (Strict privacy), < 1% (Low risk).
-- **Risk**: Direct memorization of training samples.
-
-### 2.2 Distance to Closest Record (DCR)
-Measures the Euclidean distance of each synthetic record to its nearest neighbor in the real dataset.
-
-- **Metric**: 5th percentile of the DCR distribution.
-- **Interpretation**: If the 5th percentile is extremely small (close to 0), the synthetic data is "hugging" real data points too closely, creating a privacy risk.
-
-### 2.3 Membership Inference Risk (Estimated)
-Estimates the vulnerability to Membership Inference Attacks (MIA), where an attacker tries to determine if a specific record was in the training set.
-
-- **Proxy Metric**:AUC score of a shadow classifier trained to distinguish "members" (training data) from "non-members" (holdout data) based on the synthetic data generator's outputs.
-- **Range**: $[0.5, 1.0]$
-- **Ideal**: $0.5$ (Random guessing - Perfect Privacy)
-- **Threshold**: $> 0.6$ indicates detectable leakage.
-
----
-
-## 3. Utility Preservation Metrics
-*Measures how well the synthetic data performs on downstream ML tasks.*
-
-### 3.1 Predictive Performance Ratio (PPR)
-Compares the accuracy (or F1/RMSE) of a model trained on synthetic data vs. real data.
-
-- **Formula**: $Score_{synthetic} / Score_{real}$
-- **Range**: $[0, \sim 1.0]$
-- **Ideal**: $1.0$ (Synthetic data yields same model performance as real data).
-- **Threshold**: $< 0.85$ indicates significant utility loss.
-
-### 3.2 Feature Importance Consistency
-Measures if the same features drive predictions in both synthetic and real data models.
-
-- **Metric**: Rank-Order Correlation (Spearman) of feature importance vectors.
-- **Range**: $[-1, 1]$
-- **Ideal**: $1.0$ (Same features are important in both).
-
----
-
-## 4. Semantic Integrity Metrics
-*Ensures data follows business rules and logic.*
-
-### 4.1 Schema Validity
-Checks conformance to defined types, ranges, and allowed values (enums).
-- **Output**: Count of invalid cells.
-
-### 4.2 Logical Constraints
-Checks multi-column logic (e.g., `Start Date <= End Date`, `Age >= 18` if `Status == 'Adult'`).
-- **Output**: Count of invalid rows.
+```json
+{
+  "signal": "distribution_shift",
+  "metric": "KS",
+  "value": 0.34,
+  "p_value": 0.002,
+  "confidence": 0.998
+}
+```

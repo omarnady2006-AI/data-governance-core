@@ -1,297 +1,211 @@
 # Outside Data Governance Engine
 
-**An interpretation layer that maps synthetic data metrics to privacy, utility, and consistency risk signals.**
+Quantitative governance signals for synthetic data. Five deterministic metrics measure structural fidelity, distributional shift, mode collapse, duplicate leakage, and membership inference risk. All metrics are computed without AI/LLM involvement; an optional LLM layer provides human-readable interpretation but cannot override scores. The distribution shift metric operates in quantile space and is provably invariant to any shared monotonic transform.
 
----
+## Mathematical Guarantees
 
-## 🎯 Why This Exists
-
-- **Problem**: Synthetic data evaluations produce disconnected metrics. Security teams can't efficiently assess privacy risks or utility degradation.
-- **Solution**: Standardized threat signal mapping with severity, confidence, and transparent aggregation logic.
-- **Non-Goal**: This is **NOT** a decision engine. It interprets risks. It does not approve, reject, or gate deployments.
-- **Role**: Advisory-only component between metric computation and human/policy decision-making.
-
----
-
-## 🏗️ Architecture
+**Distribution shift** transforms both datasets into quantile space via the reference ECDF before comparing:
 
 ```
-╔═══════════════════════════════════════════════════════════════════════════╗
-║                         EXTERNAL COMPONENTS                               ║
-║                                                                           ║
-║   ┌─────────────────┐            ┌──────────────────┐                   ║
-║   │  Synthetic      │   Data     │   Evaluation     │                   ║
-║   │  Data Generator │  ────────▶ │   Metrics Engine │                   ║
-║   │  (CTGAN, etc.)  │            │   (Privacy, etc.)│                   ║
-║   └─────────────────┘            └─────────┬────────┘                   ║
-║                                             │                             ║
-╚═════════════════════════════════════════════╪═════════════════════════════╝
-                                              │
-                                              │ Raw Metrics Dict
-                                              │ {privacy_score: 0.85,
-                                              │  utility_score: 0.90,
-                                              │  privacy_risk: {...}}
-                                              │
-                                              ▼
-╔═══════════════════════════════════════════════════════════════════════════╗
-║                  🛡️  THIS ENGINE (Advisory Only)                          ║
-╚═══════════════════════════════════════════════════════════════════════════╝
-
-    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃  PHASE 1: THREAT MAPPING (Deterministic, Rule-Based)           ┃
-    ┃                                                                 ┃
-    ┃  Input:  Raw metrics                                           ┃
-    ┃  Output: Categorized threat signals                            ┃
-    ┃                                                                 ┃
-    ┃  Examples:                                                      ┃
-    ┃  • Membership Inference    → confidence: 0.7, severity: MEDIUM ┃
-    ┃  • Distribution Drift      → confidence: 0.9, severity: HIGH   ┃
-    ┃  • Record Linkage Risk     → confidence: 0.4, severity: LOW    ┃
-    ┃  • Near-Duplicate Detected → confidence: 0.8, severity: HIGH   ┃
-    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-                              │
-                              │ Threat Signals
-                              │
-                              ▼
-    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃  PHASE 2: RISK AGGREGATION (Deterministic, Transparent)        ┃
-    ┃                                                                 ┃
-    ┃  Input:  Threat signals                                        ┃
-    ┃  Output: Dataset-level risk summary                            ┃
-    ┃                                                                 ┃
-    ┃  Aggregates:                                                    ┃
-    ┃  • Overall Risk Level:  "warning" ┃ "low" ┃ "critical"         ┃
-    ┃  • Top Threats: [drift, inference, linkage]                    ┃
-    ┃  • Severity Breakdown: {high: 2, medium: 3, low: 1}            ┃
-    ┃  • Uncertainty Flag: True (3 missing metrics)                  ┃
-    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-                │                                   
-                │ Risk Summary                      ┌─────────────────────────────┐
-                │ (deterministic)                   │ 🧠 LLM ADVISORY (Optional)  │
-                │                                   │ ─────────────────────────── │
-                ├──────────── read-only ──────────▶ │ Zero-Trust Model:           │
-                │                                   │                             │
-                │                                   │ ✓ Sanitized metrics only    │
-                │                    explanations   │ ✓ Generates explanations    │
-                │              ◀─── (non-binding)   │ ✗ CANNOT modify signals     │
-                │                                   │ ✗ CANNOT change risk level  │
-                │                                   │ ✓ Audit logged             │
-                │                                   │ ✓ Graceful fallback        │
-                │                                   └─────────────────────────────┘
-                │
-                ▼
-    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃  PHASE 3: STRUCTURED OUTPUT                                     ┃
-    ┃                                                                 ┃
-    ┃  GovernanceResult {                                             ┃
-    ┃    • dataset_risk_summary  ← Always deterministic              ┃
-    ┃    • threats[]             ← Always deterministic              ┃
-    ┃    • has_uncertainty       ← Data quality flag                 ┃
-    ┃    • llm_explanation       ← Optional, advisory only           ┃
-    ┃    • disclaimers[]         ← "Advisory only, no decisions"     ┃
-    ┃    • metadata              ← Version, timestamp, config        ┃
-    ┃  }                                                              ┃
-    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-                              │
-                              │ Interpretive Signals
-                              │ (NO DECISIONS MADE)
-                              │
-                              ▼
-╔═══════════════════════════════════════════════════════════════════════════╗
-║                         CONSUMER SYSTEMS                                  ║
-║  (Decision-making happens HERE, not in the engine above)                  ║
-║                                                                           ║
-║  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐       ║
-║  │  Human Review    │  │  Policy Engine   │  │  Audit System    │       ║
-║  │  Dashboard       │  │  (Rule-Based)    │  │  (Compliance)    │       ║
-║  │                  │  │                  │  │                  │       ║
-║  │  • View signals  │  │  • Apply policy  │  │  • Log decisions │       ║
-║  │  • Make decision │  │  • Gate pipeline │  │  • Track history │       ║
-║  └──────────────────┘  └──────────────────┘  └──────────────────┘       ║
-╚═══════════════════════════════════════════════════════════════════════════╝
+u = F_ref(x)                         # map to [0, 1]
+CvM(u_ref, u_syn)                    # Cramér–von Mises distance
+tail_diff = |P(u < 0.05) − 0.05|    # tail mass deviation
+            + |P(u > 0.95) − 0.05|
 ```
 
-**Key Insight**: This engine sits in the **interpretation layer**—it transforms raw numbers into risk context, but never decides what to do about it.
+Because `F_ref` is a monotonic function, any shared monotonic transform `g` satisfies `F_{g(ref)}(g(x)) = F_ref(x)`, so the score is invariant.
 
-### 🧠 LLM's Role (Optional, Zero-Trust)
+**Verified invariances** (run `scripts/invariance_proofs.py`):
 
-The LLM is an **optional advisory component** that can enhance explanations:
+| Metric | Invariant to |
+|--------|-------------|
+| distribution_shift | monotonic transforms (3x+7, exp, x³), row permutation |
+| mode_collapse | row permutation, uniform scaling |
+| structural_contract | row permutation, dtype cast (float64→float32), encoding |
+| duplicate_detection | sub-precision noise (σ ≤ 1e-12) |
+| leakage (DOMIAS) | row permutation, column swap, uniform scaling |
 
-- **Purpose**: Generates human-readable explanations and additional context
-- **Input**: Sanitized aggregate metrics only (NO raw data, NO PII)
-- **Output**: Non-binding explanations that CANNOT influence threat signals or risk levels
-- **Security**: All interactions are audited, logged, and can be disabled entirely
-- **Fallback**: System works fully deterministically without LLM (graceful degradation)
+## System Architecture
 
-**Critical Constraint**: The LLM receives threat signals as **read-only input**. It cannot modify, create, or remove threats. Risk aggregation is always deterministic.
+The engine is organized into four layers. Each layer has a single responsibility. Data flows strictly downward — no layer can feed back into a layer above it.
 
----
+### Layer 1 — Measurement Layer
 
-## 🧠 Core Design Philosophy
+Deterministic statistical metrics computed directly from the data. No AI, no heuristics, no learned parameters. Five metrics are computed independently:
 
-| Principle | Meaning |
-|-----------|---------|
-| **Advisory-Only** | Outputs describe risks, never make approve/reject decisions |
-| **Non-Gateable by Design** | No boolean "is_safe" field exists—results require explicit interpretation |
-| **Separation of Concerns** | Threat interpretation ≠ Policy enforcement |
-| **Zero Silent Approvals** | Missing data triggers uncertainty flags, not silent defaults |
+- **Structural contract validation** — per-column JS divergence, nullability binomial test, MI-based column-swap detection
+- **Distribution shift** — PIT via reference ECDF → Cramér–von Mises + tail mass deviation (quantile space)
+- **Mode collapse** — Local Intrinsic Dimensionality (kNN MLE) + per-column entropy loss
+- **Duplicate detection** — kNN identity-manifold matching with adaptive epsilon
+- **Membership leakage** — DOMIAS log-likelihood ratio attack with quantile-binned calibration
 
-**Design Goal**: Make automated misuse architecturally impossible.
+### Layer 2 — Signal Layer
 
----
+Raw metric outputs are mapped to typed threat signals (`threat_mapping.py`) and aggregated into a dataset-level risk summary (`threat_aggregation.py`). Each signal carries a severity, confidence, and evidence trace. No thresholds gate passage — all signals propagate.
 
-## ✅ What This Engine DOES
+### Layer 3 — Decision Layer
 
-- 🔍 **Threat Signal Mapping** – Interprets metrics into categorized threats (privacy, utility, consistency)
-- 📊 **Risk Aggregation** – Combines threats into dataset-level summaries (low/warning/critical)
-- 🏷️ **Structured Output** – JSON-serializable results with metadata and uncertainty flags
-- 🛡️ **Safe Degradation** – Handles missing/invalid metrics gracefully without crashes
-- 📝 **Auditability** – Tracks triggered conditions and escalation logic transparently
+The `RuleEngine` orchestrates metric computation and emits a machine-readable governance report containing all scores, evidence arrays, and uncertainty flags. This report is the primary output. It is fully deterministic and reproducible.
 
----
+### Layer 4 — Interpretation Layer (LLM)
 
-## ⚠️ What This Engine DOES NOT DO
+An optional `GovernanceAgent` forwards the finished report to a local or remote LLM (Ollama, Anthropic, OpenAI) to generate a natural-language explanation. The LLM receives only sanitized, aggregated metrics — never raw data.
 
-| ❌ Non-Goal | Explanation |
-|------------|-------------|
-| **Pipeline Decisions** | Does NOT approve, reject, allow, block, or gate deployments |
-| **Data Modification** | Does NOT regenerate, fix, transform, or sanitize datasets |
-| **Metric Computation** | Does NOT run statistical tests—operates on pre-computed metrics |
-| **Compliance Enforcement** | Does NOT implement GDPR, HIPAA, or regulatory rules |
-| **Privacy Guarantees** | Does NOT prove differential privacy or k-anonymity |
-| **Autonomous Operation** | Does NOT run as standalone service without oversight |
+> **Safety rule:** The LLM layer is advisory only. It cannot override, adjust, filter, or recompute any metric. All numeric scores in the governance report are final before the LLM is invoked. If the LLM is unavailable, the system falls back to a deterministic rule-based interpretation.
 
-**Critical**: This system provides **risk context**, not **action decisions**.
+### Data Flow
 
----
+```
+         ┌──────────────────────────────────┐
+         │        original + synthetic       │
+         │            datasets               │
+         └────────────────┬─────────────────┘
+                          │
+                          ▼
+   ┌─────────────────────────────────────────────┐
+   │  LAYER 1 — MEASUREMENT (deterministic)      │
+   │                                             │
+   │  structural   distribution   mode    dup    │
+   │  contract     shift          collapse detect │
+   │                       leakage (DOMIAS)      │
+   └────────────────────┬────────────────────────┘
+                        │  raw metric dicts
+                        ▼
+   ┌─────────────────────────────────────────────┐
+   │  LAYER 2 — SIGNAL                           │
+   │  threat_mapping  →  threat_aggregation       │
+   └────────────────────┬────────────────────────┘
+                        │  typed threat signals
+                        ▼
+   ┌─────────────────────────────────────────────┐
+   │  LAYER 3 — DECISION                         │
+   │  RuleEngine produces governance report       │
+   │  (scores, evidence, uncertainty flags)       │
+   └──────────┬──────────────────────────────────┘
+              │
+              ├──── governance report (machine-readable)
+              │     ← primary output, always available
+              │
+              ▼
+   ┌─────────────────────────────────────────────┐
+   │  LAYER 4 — INTERPRETATION (optional LLM)    │
+   │  natural-language explanation                │
+   │  CANNOT modify any numeric result            │
+   └─────────────────────────────────────────────┘
+```
 
-## 📦 Minimal Example
+## Quickstart
+
+### Numeric-only usage (no LLM)
 
 ```python
-from governance_core import evaluate_governance
+import pandas as pd
+from governance_core import RuleEngine
 
-# Input: pre-computed metrics
-metrics = {
-    "privacy_score": 0.85,
-    "utility_score": 0.90,
-    "privacy_risk": {"membership_inference_auc": 0.52}
-}
-
-# Evaluate (advisory only)
-result = evaluate_governance(metrics, output_mode="summary")
-
-# Interpret results
-print(result.dataset_risk_summary.overall_risk_level)  # "low" | "warning" | "critical"
-print(result.has_uncertainty)  # Boolean flag
-print(result.disclaimers)  # Advisory-only notices
-
-# Decision-making happens OUTSIDE this engine
-if result.dataset_risk_summary.overall_risk_level == "critical":
-    notify_security_team(result)  # Human review required
-```
-
-**What this returns**: Risk interpretation, NOT "approved" or "should_deploy".
-
----
-
-## 🔗 Where This Fits
-
-### Integration Patterns
-
-```
-Pattern 1: Synthetic Data Pipeline
-┌─────────┐   ┌─────────┐   ┌──────────────┐   ┌───────────┐
-│ Generate│──▶│ Evaluate│──▶│ THIS ENGINE  │──▶│ Dashboard │
-│ Synth   │   │ Metrics │   │ (interpret)  │   │ (review)  │
-└─────────┘   └─────────┘   └──────────────┘   └───────────┘
-```
-
-```
-Pattern 2: Policy Engine Integration
-┌──────────────┐   ┌──────────────┐   ┌─────────────┐
-│ THIS ENGINE  │──▶│ Policy Engine│──▶│ Deployment  │
-│ (advisory)   │   │ (decides)    │   │ (action)    │
-└──────────────┘   └──────────────┘   └─────────────┘
-```
-
-```
-Pattern 3: Audit Trail
-┌──────────────┐   ┌──────────────┐
-│ THIS ENGINE  │──▶│ Audit System │
-│ (signals)    │   │ (log/track)  │
-└──────────────┘   └──────────────┘
-```
-
-**What this engine does NOT provide**: CI/CD integration, IDE extensions, deployment automation.
-
-**What you must build**: The decision logic that consumes this engine's output.
-
----
-
-## 📋 Quick Reference
-
-### Input
-```python
-{
-    "privacy_score": float,      # 0.0–1.0
-    "utility_score": float,      # 0.0–1.0
-    "privacy_risk": {...},       # Detailed risk metrics
-    "statistical_fidelity": {...},
-    "semantic_invariants": {...}
-}
-```
-
-### Output
-```python
-GovernanceResult(
-    dataset_risk_summary,   # Overall risk level + breakdown
-    threats,                # Individual threat signals (optional)
-    has_uncertainty,        # Data quality flag
-    uncertainty_notes,      # Human-readable issues
-    disclaimers,            # Advisory-only notices
-    metadata               # Version, timestamp, config
+engine = RuleEngine()
+result = engine.evaluate_synthetic_data(
+    synthetic_df=pd.read_csv("synthetic.csv"),
+    original_df=pd.read_csv("original.csv"),
 )
+
+# All scores are deterministic — no LLM involved
+print(result["distribution_shift_score"])   # float ∈ [0, 1]
+print(result["mode_collapse_probability"])   # float ∈ [0, 1]
+print(result["duplicates_rate"])             # float ∈ [0, 1]
+
+# Full evidence breakdown
+for col, info in result["statistical_fidelity"]["distribution_shift"]["per_column"].items():
+    print(f"  {col}: shift={info['shift_score']:.4f}")
 ```
 
-### Risk Levels (Interpretive, Not Decisions)
-- **`low`** – No significant threats detected
-- **`warning`** – Medium-severity threats present, review recommended
-- **`critical`** – High-severity threats detected, manual review required
-- **`unknown`** – Insufficient data for assessment
+### With LLM explanation
 
----
+```python
+from governance_core import RuleEngine
+from governance_core.governance_agent import GovernanceAgent
 
-## 🎓 Learn More
+# Step 1: compute metrics (deterministic, no LLM)
+engine = RuleEngine()
+result = engine.evaluate_synthetic_data(
+    synthetic_df=synthetic_df,
+    original_df=original_df,
+)
 
-| Document | Purpose |
-|----------|---------|
-| [Scope and Boundaries](docs/SCOPE_AND_BOUNDARIES.md) | Detailed technical boundaries |
-| [Threat Model](docs/THREAT_MODEL.md) | Threat catalog and detection logic |
-| [Leakage Metrics](docs/LEAKAGE_METRICS.md) | Privacy risk metrics |
-| [Examples](examples/) | Usage patterns and test cases |
-
----
-
-## 📌 Philosophy Summary
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                              │
-│  This engine answers: "What privacy, utility, and           │
-│  consistency risks are present in this dataset?"            │
-│                                                              │
-│  It does NOT answer: "Should I deploy this dataset?"        │
-│                                                              │
-│  ────────────────────────────────────────────────────────── │
-│                                                              │
-│  Interpretation  ✓  (this engine)                           │
-│  Enforcement     ✗  (your responsibility)                   │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+# Step 2: optional — ask LLM to explain the finished report
+agent = GovernanceAgent(provider_type="ollama")  # or "anthropic", "openai"
+interpretation = agent.interpret_metrics(result)
+print(interpretation["explanation"])  # natural-language summary
+# The numeric scores in `result` are unchanged — the LLM only explains them.
 ```
 
-**Advisory-Only Notice**: This engine provides risk interpretation, not deployment authorization. All results inform human review or policy engine logic—they do not replace it.
+## Signals
 
----
+| Signal | What it measures | Key output |
+|--------|-----------------|------------|
+| **Structural contract** | Per-column distributional match via JS divergence, nullability changes, column swap detection | `column_violations`, `any_violation` |
+| **Distribution shift** | Marginal shift in quantile space (CvM + tail) and multivariate shift (Spearman Δρ) | `shift_score` ∈ [0, 1] |
+| **Mode collapse** | Support volume loss, entropy loss, intrinsic dimensionality drop, categorical coverage | `collapse_probability` ∈ [0, 1] |
+| **Duplicate detection** | Exact and near-duplicate rates between synthetic and original | `duplicates_rate`, `exact_duplicates_count` |
+| **Membership leakage** | DOMIAS likelihood-ratio attack: KDE density ratio for each record | `leakage_risk_score`, `membership_inference_auc` |
 
-**Version**: 2.1.0 | **License**: MIT | **Dependencies**: Python 3.7+ (stdlib only)
+## Limitations
+
+- **Sample size**: CvM and KDE estimates degrade below ~200 rows per dataset. A `sample_size_warning` flag is emitted.
+- **High dimensionality**: KDE-based metrics (DOMIAS, mode collapse) suffer from curse of dimensionality. Effective above ~10-15 numeric columns only.
+- **Categorical-only data**: Distribution shift falls back to JS divergence for categoricals, which does not share the monotonic invariance guarantee.
+- **No causal analysis**: Metrics detect statistical symptoms, not root causes of data quality issues.
+- **Adversarial robustness**: Duplicate detection can be evaded with noise σ > 1e-2. Near-duplicate thresholds are adaptive but not foolproof.
+- **LLM dependency**: The optional LLM interpretation layer requires Ollama, Anthropic, or OpenAI. Without it, the system still produces all numeric signals.
+
+### What this system is NOT
+
+- **Not a data cleaning tool.** It does not repair, impute, or transform data. It measures properties of synthetic outputs.
+- **Not a fairness auditor.** It does not evaluate bias, protected-attribute parity, or demographic impact.
+- **Not causal inference.** It detects distributional symptoms, not causal mechanisms behind data quality problems.
+- **Not a semantic equivalence detector.** It compares statistical distributions, not whether two datasets "mean the same thing" in context.
+- **Not a deployment approval system.** It produces advisory signals for human review. It never emits approve/reject decisions.
+
+## Repository Structure
+
+```
+governance_core/          # Core library
+├── metrics/
+│   ├── statistical_fidelity.py   # Structural contract, distribution shift, mode collapse
+│   └── privacy_risk.py           # Duplicate detection, DOMIAS leakage
+├── rule_engine.py                # Deterministic metric orchestrator
+├── api.py                        # Public API (evaluate_governance)
+├── cli.py                        # Command-line interface
+├── governance_agent.py           # Optional LLM interpretation layer
+├── llm_provider.py               # Ollama / Anthropic / OpenAI adapters
+├── threat_mapping.py             # Metric → threat signal mapping
+├── threat_aggregation.py         # Dataset-level risk summary
+├── data_profiles.py              # Statistical profiling
+├── audit_logger.py               # Immutable audit log
+└── requirements.txt
+
+scripts/                  # Verification scripts
+├── invariance_proofs.py          # Formal invariance tests for all 5 metrics
+├── adversarial_audit.py          # Adversarial robustness audit
+└── domias_validation.py          # DOMIAS attack calibration
+
+tests/                    # Test suite
+docs/                     # Documentation
+examples/                 # Usage examples
+policy/                   # Policy specifications
+_archive_unused/          # Archived legacy code (not part of active system)
+```
+
+## Dependencies
+
+```
+numpy
+pandas
+scipy
+scikit-learn
+```
+
+Optional: `requests` (for Ollama/API LLM providers).
+
+## License
+
+See LICENSE file.

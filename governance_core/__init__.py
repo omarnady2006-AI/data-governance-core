@@ -1,37 +1,12 @@
 """
 Hybrid Data Governance Agent for Synthetic Data
 
-Production-grade system for evaluating synthetic datasets against:
-- Privacy leakage risk
-- Statistical fidelity
-- Semantic correctness
-- Utility preservation
-
-Architecture:
-- RuleEngine: Deterministic metric computation
-- GovernanceAgent: LLM-powered interpretation (Ollama default)
-- AuditLogger: Complete audit trails
-- DataProfiler: Privacy-preserving statistical profiles
-
-Example:
-    >>> from governance_core import RuleEngine, GovernanceAgent, DataProfiler
-    >>> 
-    >>> # Create profile from original data
-    >>> profiler = DataProfiler()
-    >>> profile = profiler.create_profile(original_df, profile_id="orig_001")
-    >>> profile.save("profiles/original.json")
-    >>> 
-    >>> # Evaluate synthetic data
-    >>> engine = RuleEngine()
-    >>> result = engine.evaluate_synthetic_data(
-    ...     synthetic_df=syn_df,
-    ...     original_profile=profile
-    ... )
-    >>> 
-    >>> # Get LLM interpretation
-    >>> agent = GovernanceAgent(provider_type="ollama")
-    >>> interpretation = agent.interpret_metrics(result)
-    >>> print(interpretation['recommendation'])
+Capabilities:
+1. Structural Contract Validation
+2. Distribution Shift Detection
+3. Mode Collapse Detection
+4. Duplicate Identifier Detection
+5. Membership Leakage Detection (DOMIAS)
 """
 
 from .rule_engine import RuleEngine
@@ -48,18 +23,16 @@ from .llm_provider import (
 from .metrics import (
     StatisticalFidelityMetrics,
     PrivacyRiskMetrics,
-    SemanticInvariantMetrics,
-    UtilityPreservationMetrics
 )
 
-# Public API facade (new in v2.1.0)
+# Public API facade
 from .api import (
     evaluate_governance,
     GovernanceResult,
     __version__ as api_version
 )
 
-__version__ = "2.1.0"
+__version__ = "3.0.0"
 
 __all__ = [
     # Core components
@@ -70,21 +43,19 @@ __all__ = [
     "DataProfiler",
     "DatasetProfile",
     "FieldProfile",
-    
+
     # LLM providers
     "LLMProvider",
     "OllamaProvider",
     "AnthropicProvider",
     "OpenAIProvider",
     "create_provider",
-    
+
     # Metrics
     "StatisticalFidelityMetrics",
     "PrivacyRiskMetrics",
-    "SemanticInvariantMetrics",
-    "UtilityPreservationMetrics",
-    
-    # Public API (v2.1.0)
+
+    # Public API
     "evaluate_governance",
     "GovernanceResult",
 ]
