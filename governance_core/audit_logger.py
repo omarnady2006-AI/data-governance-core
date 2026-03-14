@@ -349,3 +349,59 @@ class AuditLogger:
                 for entry in self.entries:
                     f.write(json.dumps(entry.to_dict()) + "\n")
             logger.info(f"Flushed {len(self.entries)} entries to {self.session_file}")
+
+
+class NullAuditLogger:
+    """
+    No-op audit logger for embedded / library use.
+
+    Used by default when the engine runs inside a host application
+    (VS Code extension, web service, unit tests) where automatic
+    filesystem writes are not acceptable.
+
+    Satisfies the full AuditLogger method surface so it can be passed
+    anywhere an AuditLogger is expected without any conditional checks
+    in the call sites.
+
+    Guarantees:
+    - Creates no directories.
+    - Writes no files.
+    - Holds no in-memory buffer.
+    - All calls are silent no-ops.
+    """
+
+    # Expose the same attribute names that call sites may inspect.
+    session_file = None
+    entries: list = []
+
+    def log_metric_computation(self, *args, **kwargs) -> None:  # noqa: D401
+        """No-op."""
+
+    def log_evaluation(self, *args, **kwargs) -> None:
+        """No-op."""
+
+    def log_event(self, *args, **kwargs) -> None:
+        """No-op."""
+
+    def log_llm_interaction(self, *args, **kwargs) -> None:
+        """No-op."""
+
+    def log_threshold_change(self, *args, **kwargs) -> None:
+        """No-op."""
+
+    def log_transformation(self, *args, **kwargs) -> None:
+        """No-op."""
+
+    def export_audit_trail(self, *args, **kwargs) -> None:
+        """No-op."""
+
+    def get_evaluation_history(self, eval_id: str) -> list:
+        """Returns empty list — no entries are ever stored."""
+        return []
+
+    def get_llm_calls(self, eval_id=None) -> list:
+        """Returns empty list — no entries are ever stored."""
+        return []
+
+    def flush(self) -> None:
+        """No-op."""
