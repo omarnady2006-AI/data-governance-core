@@ -156,10 +156,6 @@ def _kde_log_density_loo(x_train: np.ndarray, cov: np.ndarray, log_const: float)
 class PrivacyRiskMetrics:
     """Duplicate detection via identity manifold + DOMIAS membership inference."""
 
-    def __init__(self, domias_alpha: float = 1.0, random_state: int = 42):
-        self.domias_alpha = domias_alpha
-        self.random_state = random_state
-
     # ------------------------------------------------------------------
     # D) Duplicate Detection — kNN identity manifold
     # ------------------------------------------------------------------
@@ -392,29 +388,76 @@ class PrivacyRiskMetrics:
     # compute_all (minimal surface)
     # ------------------------------------------------------------------
 
+    # Maximum number of rows for which DOMIAS will run.
+    # DOMIAS builds an N×N pairwise Mahalanobis matrix; memory usage is
+    # O(N²·8 bytes).  At 8 000 rows that is ~0.48 GB — safe on typical
+    # workstations.  Above this limit DOMIAS is skipped and downstream
+    # consumers receive None values, which the derived-metric layer already
+    # handles gracefully (membership_inference_auc falls back to None).
+    # Override at construction time via domias_row_limit if more RAM is
+    # available: PrivacyRiskMetrics(domias_row_limit=20_000)
+    DOMIAS_ROW_LIMIT: int = 8_000
+
+    def __init__(self, domias_alpha: float = 1.0, random_state: int = 42,
+                 domias_row_limit: int = DOMIAS_ROW_LIMIT):
+        self.domias_alpha = domias_alpha
+        self.random_state = random_state
+        self.domias_row_limit = domias_row_limit
+
     def compute_all(
         self, synthetic_df: pd.DataFrame,
         original_df: Optional[pd.DataFrame] = None,
         original_profile: Optional[object] = None
     ) -> Dict[str, Any]:
-        """Compute all privacy risk metrics."""
+        """Compute all privacy risk metrics.
+
+        DOMIAS is skipped automatically when ``original_df`` exceeds
+        ``self.domias_row_limit`` rows to prevent O(N²) memory exhaustion.
+        The ``domias_skipped`` flag is set to ``True`` in the result when
+        this occurs so callers can detect the omission.
+        """
         result: Dict[str, Any] = {"evidence": []}
 
         if original_df is not None:
             dup = self.detect_duplicates(synthetic_df, original_df)
             result.update(dup)
-            domias = self.run_domias_attack(original_df.reset_index(drop=True), synthetic_df.reset_index(drop=True))
-            result.update({
-                "lr_distribution_mean": domias["lr_distribution_mean"],
-                "lr_distribution_std": domias["lr_distribution_std"],
-                "top1_percent_lr": domias["top1_percent_lr"],
-                "quantile_calibration": domias["quantile_calibration"],
-            })
+
+            # ----------------------------------------------------------
+            # DOMIAS memory-safety guard
+            # ----------------------------------------------------------
+            if len(original_df) > self.domias_row_limit:
+                logger.warning(
+                    f"DOMIAS skipped: original_df has {len(original_df)} rows "
+                    f"(limit {self.domias_row_limit}). "
+                    f"Pass domias_row_limit=N to PrivacyRiskMetrics() to override."
+                )
+                domias_result = {
+                    "lr_distribution_mean": None,
+                    "lr_distribution_std": None,
+                    "top1_percent_lr": None,
+                    "quantile_calibration": [],
+                    "domias_skipped": True,
+                }
+            else:
+                raw = self.run_domias_attack(
+                    original_df.reset_index(drop=True),
+                    synthetic_df.reset_index(drop=True),
+                )
+                domias_result = {
+                    "lr_distribution_mean": raw["lr_distribution_mean"],
+                    "lr_distribution_std": raw["lr_distribution_std"],
+                    "top1_percent_lr": raw["top1_percent_lr"],
+                    "quantile_calibration": raw["quantile_calibration"],
+                    "domias_skipped": False,
+                }
+
+            result.update(domias_result)
         else:
             result.update({
                 "duplicates_count": 0, "duplicates_rate": 0.0,
                 "lr_distribution_mean": None, "lr_distribution_std": None,
                 "top1_percent_lr": None, "quantile_calibration": [],
+                "domias_skipped": False,
             })
 
         return result
