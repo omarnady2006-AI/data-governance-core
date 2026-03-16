@@ -1,6 +1,0 @@
-user_id,email,phone,age_bucket,city,zip_prefix_3,country,gender,amount,created_at,label
-tok_user_1,tok_email_1,tok_phone_1,30-50,Beverly Hills,902,US,M,250.75,2025-12-01T08:30:00Z,active
-tok_user_2,tok_email_2,tok_phone_2,30-50,New York,100,US,F,1200.00,2025-11-15T14:45:00Z,active
-tok_user_3,tok_email_3,tok_phone_3,30-50,Atlanta,303,US,M,75.00,2025-10-20T09:15:00Z,inactive
-tok_user_4,tok_email_4,tok_phone_4,30-50,Chicago,606,US,F,500.50,2025-09-10T12:00:00Z,active
-tok_user_5,tok_email_5,tok_phone_5,30-50,San Francisco,941,US,M,300.00,2025-08-05T16:20:00Z,inactive

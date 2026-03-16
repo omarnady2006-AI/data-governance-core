@@ -1,6 +1,0 @@
-user_guid,email_address,mobile,full_name,ssn,birth_date,street_address,postal_code,city,country,gender,amount,created_at,label
-123e4567-e89b-12d3-a456-426614174000,john.doe@example.com,555-123-4567,John Doe,123-45-6789,1985-07-12,123 Maple St,90210,Beverly Hills,US,M,250.75,2025-12-01T08:30:00Z,active
-223e4567-e89b-12d3-a456-426614174001,jane.smith@example.org,555-987-6543,Jane Smith,987-65-4321,1990-03-22,456 Oak Ave,10001,New York,US,F,1200.00,2025-11-15T14:45:00Z,active
-323e4567-e89b-12d3-a456-426614174002,bob.johnson@example.net,555-555-1212,Bob Johnson,555-55-5555,1978-11-05,789 Pine Rd,30301,Atlanta,US,M,75.00,2025-10-20T09:15:00Z,inactive
-423e4567-e89b-12d3-a456-426614174003,alice.williams@example.co,555-222-3333,Alice Williams,222-22-2222,1995-06-30,321 Birch Blvd,60614,Chicago,US,F,500.50,2025-09-10T12:00:00Z,active
-523e4567-e89b-12d3-a456-426614174004,michael.brown@example.io,555-444-7777,Michael Brown,444-44-4444,1982-01-18,654 Cedar Ln,94105,San Francisco,US,M,300.00,2025-08-05T16:20:00Z,inactive
